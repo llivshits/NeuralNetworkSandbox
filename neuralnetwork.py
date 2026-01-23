@@ -7,6 +7,7 @@ class InputNeuron:
     def __init__(self, value=0):
         self.value = value
         self.outputs = []
+        self.inputs = []
 
     def forward_prop(self):
         for edge in self.outputs:
@@ -22,15 +23,16 @@ class InputNeuron:
 class OutputNeuron:
     def __init__(self, bias):
         self.inputs = []
+        self.outputs = []
         self.bias = bias
         self.z = 0
         self.output = 0
         self.delta = 0
 
-    def compute_z(self, total):  # for use in network level softmax
+    def compute_z(self):  # for use in network level softmax
         return sum(item.val * item.weight for item in self.inputs) + self.bias
 
-    def compute_z(self, target):
+    def compute_delta(self, target):
         self.delta = self.output - target
 
     def update_weights(self, learning_rate):
@@ -61,8 +63,9 @@ class HiddenNeuron:
         total = 0.0
         for item in self.inputs:
             total += item.val * item.weight
+        self.z = total + self.bias  
         for item in self.outputs:
-            item.val = self.relu(total + self.bias)
+            item.val = self.relu(self.z)
 
     def relu(self, value):
         return max(0, value)
@@ -131,7 +134,7 @@ class NeuralNetwork:  # For a 3 layer network with one hidden layer
         for i, neuron in enumerate(self.hidden_neurons):
             error = sum(
                 o_neuron.delta * o_neuron.inputs[i].weight
-                for o__neuron in self.output_neurons
+                for o_neuron in self.output_neurons
             )
             neuron.compute_delta(error)
             neuron.update_weights(learning_rate)
@@ -150,10 +153,11 @@ class NeuralNetwork:  # For a 3 layer network with one hidden layer
             outputs, eps, 1 - eps
         )  # makes sure that the values are not 0, because log(0) doesnt exist
         return -np.sum(
-            targets * np.log(outputs), axis=1
-        )  # returns the negative sum of log of highest probability per output neuron, returns as loss
+            targets * np.log(outputs)
+        )  # negative log-likelihood for the one-hot target
 
     def train(self, x_train, y_train, epochs, learning_rate):
+        epoch_losses = []
         for epoch in range(epochs):
             total_loss = 0
             for x, target in zip(x_train, y_train):
@@ -162,7 +166,9 @@ class NeuralNetwork:  # For a 3 layer network with one hidden layer
                 total_loss += loss
                 self.backward(target, learning_rate)
 
+            avg_loss = total_loss / len(x_train)
+            epoch_losses.append(float(avg_loss))
             if epoch % 10 == 0:
-                avg_loss = total_loss / len(x_train)
                 print(f"Epoch {epoch}/{epochs}, Loss: {avg_loss:.4f}")
         print("Training complete!")
+        return epoch_losses
